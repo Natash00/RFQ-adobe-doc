@@ -78,13 +78,13 @@ async function startServer() {
   });
 
   // ✅ PRODUCTION FRONTEND FIX (IMPORTANT FOR RENDER)
-  const distPath = path.resolve("dist");
+  const distPath = path.join(process.cwd(), "dist");
 
-  app.use(express.static(distPath));
+app.use(express.static(distPath));
 
-  app.get("*", (req, res) => {
-    res.sendFile(path.join(distPath, "index.html"));
-  });
+app.get("*", (req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
+});
 
   // ✅ START SERVER (Render requirement)
   app.listen(PORT, "0.0.0.0", () => {
