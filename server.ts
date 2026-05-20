@@ -24,31 +24,47 @@ async function startServer() {
     const receiverEmail = process.env.RECEIVER_EMAIL;
     const brevoKey = process.env.BREVO_API_KEY;
 
-    if (!emailUser || !brevoKey) {
+    if (!emailUser || !receiverEmail || !brevoKey) {
+      console.error("Missing environment variables");
       return res.status(500).json({
-        error: "Missing EMAIL_USER or BREVO_API_KEY in environment variables",
+        error: "Server misconfiguration (missing env vars)",
       });
     }
 
-    // IP detection
-    const forwardFor = req.headers["x-forwarded-for"] as string;
+    // ---------------------------
+    // SAFE IP HANDLING
+    // ---------------------------
     let ip =
-      (forwardFor
-        ? forwardFor.split(",")[0].trim()
-        : req.ip || req.socket.remoteAddress || "").trim();
+      (req.headers["x-forwarded-for"] as string)?.split(",")[0].trim() ||
+      req.ip ||
+      req.socket.remoteAddress ||
+      "unknown";
 
-    let locationInfo = "Location metadata unavailable";
+    if (ip.includes("::ffff:")) {
+      ip = ip.split("::ffff:")[1];
+    }
 
+    let locationInfo = "Location unavailable";
+
+    // ---------------------------
+    // GEO LOOKUP (SAFE)
+    // ---------------------------
     try {
-      const resIp = await fetch(`https://ipapi.co/${ip}/json/`);
-      const data = await resIp.json();
+      const response = await fetch(`https://ipapi.co/${ip}/json/`);
+      const data = await response.json();
+
       if (data && !data.error) {
         locationInfo = `${data.city}, ${data.region}, ${data.country_name}`;
       }
-    } catch {}
+    } catch (err) {
+      console.log("Geo lookup failed");
+    }
 
+    // ---------------------------
+    // BREVO EMAIL
+    // ---------------------------
     try {
-      console.log(`Sending signup email for ${email}`);
+      console.log(`Sending email for ${email}`);
 
       const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
@@ -59,7 +75,7 @@ async function startServer() {
 
       await apiInstance.sendTransacEmail({
         sender: { email: emailUser },
-        to: [{ email: receiverEmail || emailUser }],
+        to: [{ email: receiverEmail }],
         subject: `New Signup: ${email}`,
         htmlContent: `
           <h3>New Signup</h3>
@@ -70,27 +86,31 @@ async function startServer() {
         `,
       });
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         message: "Email sent successfully",
       });
     } catch (error) {
-      console.error("Brevo error:", error);
+      console.error("BREVO ERROR:", error);
       return res.status(500).json({
-        error: "Failed to send email",
+        error: "Email sending failed",
       });
     }
   });
 
-  // Vite production handling
+  // ---------------------------
+  // FRONTEND (VITE)
+  // ---------------------------
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
+
     app.use(vite.middlewares);
   } else {
     const distPath = path.resolve("dist");
+
     app.use(express.static(distPath));
 
     app.get(/.*/, (req, res) => {
