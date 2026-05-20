@@ -1,0 +1,6 @@
+{
+  "name": "Secured Document Viewer",
+  "description": "A professional document viewing interface with secured remote attachments and batch download capabilities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
