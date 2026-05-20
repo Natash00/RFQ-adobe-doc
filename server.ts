@@ -96,15 +96,12 @@ async function startServer() {
       console.log(`Attempting to send signup info for ${email} from IP: ${ip}`);
       
       const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
+  host: "smtp-relay.brevo.com",
   port: 587,
   secure: false,
   auth: {
-    user: emailUser,
-    pass: emailPass,
-  },
-  tls: {
-    rejectUnauthorized: false,
+    user: "abeb2a001@smtp-brevo.com",
+    pass: process.env.EMAIL_PASS,
   },
 });
 
