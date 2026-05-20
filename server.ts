@@ -96,14 +96,17 @@ async function startServer() {
       console.log(`Attempting to send signup info for ${email} from IP: ${ip}`);
       
       const transporter = nodemailer.createTransport({
-        host: "smtp.gmail.com",
-        port: 465,
-        secure: true,
-        auth: {
-          user: emailUser,
-          pass: emailPass,
-        },
-      });
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
+  auth: {
+    user: emailUser,
+    pass: emailPass,
+  },
+  tls: {
+    rejectUnauthorized: false,
+  },
+});
 
       // Verify connection configuration
       try {

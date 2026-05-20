@@ -7,6 +7,14 @@ import { motion, AnimatePresence } from "motion/react";
 import { Download, Eye, Edit2, Save, FileText, Package, Layout, AlertTriangle, Mail, Lock, X, User } from "lucide-react";
 import { useState, FormEvent, useEffect } from "react";
 
+// Import images for proper compilation and tracking by Vite
+// @ts-ignore
+import purchaseOrderImg from "./assets/images/purchase_order_preview_1779038214968.png";
+// @ts-ignore
+import specificationsImg from "./assets/images/specifications_document_preview_1779038236725.png";
+// @ts-ignore
+import presentationImg from "./assets/images/presentation_preview_1779038254005.png";
+
 export default function App() {
   const [isOpen, setIsOpen] = useState(true);
   const [showSignUp, setShowSignUp] = useState(false);
@@ -82,21 +90,21 @@ export default function App() {
       id: 1,
       title: "Purchase Order",
       time: "A few hours ago",
-      image: "/src/assets/images/purchase_order_preview_1779038214968.png",
+      image: purchaseOrderImg,
       color: "bg-white",
     },
     {
       id: 2,
-      title: "Specifications",
       time: "A few minutes ago",
-      image: "/src/assets/images/specifications_document_preview_1779038236725.png",
+      title: "Specifications",
+      image: specificationsImg,
       color: "bg-white",
     },
     {
       id: 3,
       title: "Company Presentation",
       time: "A few hours ago",
-      image: "/src/assets/images/presentation_preview_1779038254005.png",
+      image: presentationImg,
       color: "bg-white",
     },
   ];
@@ -155,9 +163,10 @@ export default function App() {
               className={`relative w-full max-w-2xl bg-white rounded shadow-2xl overflow-hidden transition-all duration-500 ${showSignUp ? "blur-[2px] scale-[0.98] pointer-events-none" : ""}`}
               id="document-portal"
             >
-              <div className="h-1 bg-red-600 w-full" />
-              
-              <div className="px-8 pt-8 pb-10">
+              <div className="relative z-10">
+                <div className="h-1 bg-red-600 w-full" />
+                
+                <div className="px-8 pt-8 pb-10">
                 <h2 className="text-sm font-semibold text-gray-700 mb-8 border-b border-gray-100 pb-2 inline-block">
                   Secured Remote Attachment
                 </h2>
@@ -200,6 +209,7 @@ export default function App() {
                   </button>
                 </div>
               </div>
+            </div>
             </motion.div>
           </div>
         )}
